@@ -1,146 +1,82 @@
 #include <ESP8266WiFi.h>
 #include <espnow.h>
-#include <PubSubClient.h>
-#include <Servo.h>
+#include <TaskScheduler.h>
 
-// Update with your WiFi and MQTT broker details
-const char* ssid = "Tel-U 49";
-const char* password = "capstone49";
-const char* mqttServer = "broker.emqx.io";
-const int mqttPort = 1883;
-const char* mqttUsername = "emqx";
-const char* mqttPassword = "public";
-const char* mqttTopic = "kelasiotesp/hasbi/data/astuti";
-const char* mqttTopic2 = "kelasiotesp/hasbi/data/astuti/button";
+Scheduler taskScheduler;
 
-WiFiClient espClient;
-PubSubClient client(espClient);
-Servo myservo;
+const int trigPin = D1;  // D1 (GPIO5) on ESP8266
+const int echoPin = D2;  // D2 (GPIO4) on ESP8266
 
-// Structure example to receive distance data
-typedef struct struct_distance {
-    float distance_cm;
-    bool servo_moved; // New field to indicate servo movement
-} struct_distance;
+// REPLACE WITH RECEIVER MAC Address
+uint8_t broadcastAddress[] = {0x24, 0xD7, 0xEB, 0xC9, 0x25, 0x77};
 
-// Create a struct_distance called sensorData
-struct_distance sensorData;
+struct struct_message {
+  float distance_cm;
+  bool servo_moved;
 
-// Callback function that will be executed when data is received
-void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
-  if (len == sizeof(struct_distance)) {
-    memcpy(&sensorData, incomingData, sizeof(struct_distance));
-    
-    Serial.print("Bytes received: ");
-    Serial.println(len);
-    Serial.print("Distance in cm: ");
-    Serial.println(sensorData.distance_cm);
-    Serial.print("Servo state: ");
-    Serial.println(sensorData.servo_moved);
+} sensorData;
 
-    // Move the servo if distance is over 10cm
-    if (sensorData.distance_cm > 10) {
-      myservo.write(90); // Change the angle as needed
-      delay(1000); // Adjust the delay as needed for servo movement
-      myservo.write(0); // Reset servo position
-      sensorData.servo_moved = true; // Update the servo state
-    } else {
-      sensorData.servo_moved = false; // Reset the servo state if not moved
-    }
+unsigned long lastTime = 0;
+unsigned long timerDelay = 2000;  // send readings timer
 
-    Serial.print("Servo state: ");
-    Serial.println(sensorData.servo_moved);
-
-    // Send only the distance in centimeters to the MQTT broker
-   
-
-    
+void OnDataSent(uint8_t *mac_addr, uint8_t sendStatus) {
+  Serial.print("Last Packet Send Status: ");
+  if (sendStatus == 0) {
+    Serial.println("Delivery success");
   } else {
-    Serial.println("Received data size mismatch!");
+    Serial.println("Delivery fail");
   }
 }
-void callback2(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  
-  // Convert payload to a string
-  String message = "";
-  for (unsigned int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  
-  Serial.println(message);
 
-  // Check the message received and act accordingly to control the servo
-  if (String(topic) == mqttTopic2) {
-    if (message.equals("1")) {
-      myservo.write(90); // Rotate the servo
-      delay(1000);
-      myservo.write(0); // Reset servo position
-      Serial.print("eh kepencet: ");
-      Serial.println(message);
-    }
-  }
+void readSensor(){
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
 
+  unsigned long duration = pulseIn(echoPin, HIGH);
+  sensorData.servo_moved = false;
+
+  sensorData.distance_cm = duration / 58.2;
+
+  esp_now_send(broadcastAddress, (uint8_t *)&sensorData, sizeof(sensorData));
+
+  // Menampilkan informasi ke Serial Monitor
+  Serial.print("Distance: ");
+  Serial.print(sensorData.distance_cm);
+  Serial.println(" cm");
 }
 
-void setupWiFi() {
-  Serial.print("Connecting to Wi-Fi...");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("WiFi connected");
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print(client.state());
-    Serial.print("Attempting MQTT connection...");
-    if (client.connect("ESP8266Client", mqttUsername, mqttPassword)) {
-      Serial.println("connected");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-   if (client.connected()) {
-      char message[50]; // Adjust the size as needed
-      snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1:0);
-      client.publish(mqttTopic, message);
-    }
-}
+Task taskSensor(5000, TASK_FOREVER, &readSensor);
 
 void setup() {
   Serial.begin(115200);
-  Serial.print("MAC Address: ");
-  Serial.println(WiFi.macAddress());
 
-  setupWiFi();
+  WiFi.mode(WIFI_STA);
 
-  client.setServer(mqttServer, mqttPort);
-
-  if (!client.connected()) {
-    reconnect();
+  if (esp_now_init() != 0) {
+    Serial.println("Error initializing ESP-NOW");
+    return;
   }
 
-  esp_now_init();
+  esp_now_set_self_role(ESP_NOW_ROLE_CONTROLLER);
+  esp_now_register_send_cb(OnDataSent);
+  
+  esp_now_add_peer(broadcastAddress, ESP_NOW_ROLE_SLAVE, 1, NULL, 0);
 
-  esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
-  esp_now_register_recv_cb(OnDataRecv);
-  client.subscribe(mqttTopic2);
-  client.setCallback(callback2);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
 
-  myservo.attach(D1); // Attach servo signal pin to GPIO pin D1
+  taskScheduler.init();
+  taskScheduler.addTask(taskSensor); // Menambahkan objek Task ke scheduler
+  taskSensor.enable();
+  taskScheduler.startNow(); 
+  readSensor(); // Membaca sensor pertama kali saat inisialisasi
 }
 
 void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
+  taskScheduler.execute();
+  // taskSensor.execute();
+  // readSensor();
 }

@@ -4,19 +4,21 @@
 #include <Servo.h>
 
 // Update with your WiFi and MQTT broker details
-const char* ssid = "KAZ";
-const char* password = "modalcokla";
+const char* ssid = "Tel-U 49";
+const char* password = "capstone49";
+// const char* mqttServer = "test.mosquitto.org";
 const char* mqttServer = "broker.emqx.io";
 const int mqttPort = 1883;
 const char* mqttUsername = "emqx";
 const char* mqttPassword = "public";
+// const char* mqttTopic = "Astuti/IOT/Test";
 const char* mqttTopic = "kelasiotesp/hasbi/data/astuti";
 const char* mqttTopic2 = "kelasiotesp/hasbi/data/astuti/button";
-const char* clientId = "KAZARACH";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 Servo myservo;
+
 
 // Structure example to receive distance data
 typedef struct struct_distance {
@@ -45,24 +47,16 @@ void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
       delay(1000); // Adjust the delay as needed for servo movement
       myservo.write(0); // Reset servo position
       sensorData.servo_moved = true; // Update the servo state
-      if (client.connected()) {
-        char message[50]; // Adjust the size as needed
-        snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
-        client.publish(mqttTopic, message);
-    }
     } else {
-      sensorData.servo_moved = false;
-      if (client.connected()) {
-        char message[50]; // Adjust the size as needed
-        snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
-        client.publish(mqttTopic, message);
-    } // Reset the servo state if not moved
+      sensorData.servo_moved = false; // Reset the servo state if not moved
     }
 
     Serial.print("Servo state: ");
     Serial.println(sensorData.servo_moved);
 
     // Send only the distance in centimeters to the MQTT broker
+   
+
     
   } else {
     Serial.println("Received data size mismatch!");
@@ -106,9 +100,10 @@ void setupWiFi() {
 
 void reconnect() {
   while (!client.connected()) {
+    // delay(5000);
     Serial.print(client.state());
     Serial.print("Attempting MQTT connection...");
-    if (client.connect(clientId)) {
+    if (client.connect("ESP8266Client", mqttUsername, mqttPassword)) {
       Serial.println("connected");
     } else {
       Serial.print("failed, rc=");
@@ -117,6 +112,11 @@ void reconnect() {
       delay(5000);
     }
   }
+   if (client.connected()) {
+      char message[50]; // Adjust the size as needed
+      snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1:0);
+      client.publish(mqttTopic, message);
+    }
 }
 
 void setup() {
@@ -127,7 +127,7 @@ void setup() {
   setupWiFi();
 
   client.setServer(mqttServer, mqttPort);
-  // client.setClient(clientId);
+
   if (!client.connected()) {
     reconnect();
   }
@@ -136,10 +136,11 @@ void setup() {
 
   esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
   esp_now_register_recv_cb(OnDataRecv);
-  client.subscribe(mqttTopic2);
   client.setCallback(callback2);
+  client.subscribe(mqttTopic2);
+  
 
-  myservo.attach(D1); // Attach servo signal pin to GPIO pin D1
+  myservo.attach(D8); // Attach servo signal pin to GPIO pin D1
 }
 
 void loop() {

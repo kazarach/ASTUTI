@@ -4,15 +4,14 @@
 #include <Servo.h>
 
 // Update with your WiFi and MQTT broker details
-const char* ssid = "KAZ";
-const char* password = "modalcokla";
+const char* ssid = "Tel-U 49";
+const char* password = "capstone49";
 const char* mqttServer = "broker.emqx.io";
 const int mqttPort = 1883;
 const char* mqttUsername = "emqx";
 const char* mqttPassword = "public";
 const char* mqttTopic = "kelasiotesp/hasbi/data/astuti";
 const char* mqttTopic2 = "kelasiotesp/hasbi/data/astuti/button";
-const char* clientId = "KAZARACH";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -45,18 +44,8 @@ void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
       delay(1000); // Adjust the delay as needed for servo movement
       myservo.write(0); // Reset servo position
       sensorData.servo_moved = true; // Update the servo state
-      if (client.connected()) {
-        char message[50]; // Adjust the size as needed
-        snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
-        client.publish(mqttTopic, message);
-    }
     } else {
-      sensorData.servo_moved = false;
-      if (client.connected()) {
-        char message[50]; // Adjust the size as needed
-        snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
-        client.publish(mqttTopic, message);
-    } // Reset the servo state if not moved
+      sensorData.servo_moved = false; // Reset the servo state if not moved
     }
 
     Serial.print("Servo state: ");
@@ -67,31 +56,6 @@ void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
   } else {
     Serial.println("Received data size mismatch!");
   }
-}
-void callback2(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  
-  // Convert payload to a string
-  String message = "";
-  for (unsigned int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  
-  Serial.println(message);
-
-  // Check the message received and act accordingly to control the servo
-  if (String(topic) == mqttTopic2) {
-    if (message.equals("1")) {
-      myservo.write(90); // Rotate the servo
-      delay(1000);
-      myservo.write(0); // Reset servo position
-      Serial.print("eh kepencet: ");
-      Serial.println(message);
-    }
-  }
-
 }
 
 void setupWiFi() {
@@ -104,21 +68,6 @@ void setupWiFi() {
   Serial.println("WiFi connected");
 }
 
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print(client.state());
-    Serial.print("Attempting MQTT connection...");
-    if (client.connect(clientId)) {
-      Serial.println("connected");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-}
-
 void setup() {
   Serial.begin(115200);
   Serial.print("MAC Address: ");
@@ -127,11 +76,8 @@ void setup() {
   setupWiFi();
 
   client.setServer(mqttServer, mqttPort);
-  // client.setClient(clientId);
-  if (!client.connected()) {
-    reconnect();
-  }
 
+ 
   esp_now_init();
 
   esp_now_set_self_role(ESP_NOW_ROLE_SLAVE);
@@ -143,8 +89,5 @@ void setup() {
 }
 
 void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
   client.loop();
 }
