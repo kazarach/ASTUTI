@@ -4,11 +4,11 @@
 
 Scheduler taskScheduler;
 
-const int trigPin = D1;  // D1 (GPIO5) on ESP8266
-const int echoPin = D2;  // D2 (GPIO4) on ESP8266
+const int trigPin = D1; 
+const int echoPin = D2;  
 
-// REPLACE WITH RECEIVER MAC Address
-uint8_t broadcastAddress[] = {0x24, 0xD7, 0xEB, 0xC9, 0x25, 0x77};
+uint8_t broadcastAddress[] = {0x34,0x94,0x54,0x95,0x95,0x3C};
+
 
 struct struct_message {
   float distance_cm;
@@ -69,14 +69,12 @@ void setup() {
   pinMode(echoPin, INPUT);
 
   taskScheduler.init();
-  taskScheduler.addTask(taskSensor); // Menambahkan objek Task ke scheduler
+  taskScheduler.addTask(taskSensor);
   taskSensor.enable();
   taskScheduler.startNow(); 
-  readSensor(); // Membaca sensor pertama kali saat inisialisasi
+  readSensor();
 }
 
 void loop() {
-  taskScheduler.execute();
-  // taskSensor.execute();
-  // readSensor();
+  
 }

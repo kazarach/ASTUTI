@@ -4,30 +4,27 @@
 #include <Servo.h>
 
 // Update with your WiFi and MQTT broker details
-const char* ssid = "KAZ";
-const char* password = "modalcokla";
+const char* ssid = "Tel-U 49";
+const char* password = "capstone49";
 const char* mqttServer = "broker.emqx.io";
 const int mqttPort = 1883;
 const char* mqttUsername = "emqx";
 const char* mqttPassword = "public";
-const char* mqttTopic = "kelasiotesp/hasbi/data/astuti";
-const char* mqttTopic2 = "kelasiotesp/hasbi/data/astuti/button";
+const char* mqttTopic = "kelasiotesp/astuti";
+const char* mqttTopic2 = "kelasiotesp/astuti/button";
 const char* clientId = "KAZARACH";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 Servo myservo;
 
-// Structure example to receive distance data
 typedef struct struct_distance {
     float distance_cm;
-    bool servo_moved; // New field to indicate servo movement
+    bool servo_moved;
 } struct_distance;
 
-// Create a struct_distance called sensorData
 struct_distance sensorData;
 
-// Callback function that will be executed when data is received
 void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
   if (len == sizeof(struct_distance)) {
     memcpy(&sensorData, incomingData, sizeof(struct_distance));
@@ -36,34 +33,28 @@ void OnDataRecv(uint8_t *mac, uint8_t *incomingData, uint8_t len) {
     Serial.println(len);
     Serial.print("Distance in cm: ");
     Serial.println(sensorData.distance_cm);
-    Serial.print("Servo state: ");
-    Serial.println(sensorData.servo_moved);
 
-    // Move the servo if distance is over 10cm
     if (sensorData.distance_cm > 10) {
-      myservo.write(90); // Change the angle as needed
-      delay(1000); // Adjust the delay as needed for servo movement
-      myservo.write(0); // Reset servo position
-      sensorData.servo_moved = true; // Update the servo state
+      myservo.write(90);
+      delay(1000);
+      myservo.write(0);
+      sensorData.servo_moved = true;
+
       if (client.connected()) {
-        char message[50]; // Adjust the size as needed
+        char message[50];
         snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
         client.publish(mqttTopic, message);
     }
     } else {
       sensorData.servo_moved = false;
       if (client.connected()) {
-        char message[50]; // Adjust the size as needed
+        char message[50];
         snprintf(message, sizeof(message), "%.2f %d", sensorData.distance_cm, sensorData.servo_moved ? 1 : 0);
         client.publish(mqttTopic, message);
-    } // Reset the servo state if not moved
-    }
-
-    Serial.print("Servo state: ");
-    Serial.println(sensorData.servo_moved);
-
-    // Send only the distance in centimeters to the MQTT broker
-    
+    } 
+    } 
+      Serial.print("Servo state: ");
+      Serial.println(sensorData.servo_moved);
   } else {
     Serial.println("Received data size mismatch!");
   }
@@ -81,13 +72,12 @@ void callback2(char* topic, byte* payload, unsigned int length) {
   
   Serial.println(message);
 
-  // Check the message received and act accordingly to control the servo
   if (String(topic) == mqttTopic2) {
     if (message.equals("1")) {
-      myservo.write(90); // Rotate the servo
+      myservo.write(90);
       delay(1000);
-      myservo.write(0); // Reset servo position
-      Serial.print("eh kepencet: ");
+      myservo.write(0); 
+      Serial.print("Interrupt Signal: ");
       Serial.println(message);
     }
   }
@@ -127,7 +117,6 @@ void setup() {
   setupWiFi();
 
   client.setServer(mqttServer, mqttPort);
-  // client.setClient(clientId);
   if (!client.connected()) {
     reconnect();
   }
@@ -139,7 +128,7 @@ void setup() {
   client.subscribe(mqttTopic2);
   client.setCallback(callback2);
 
-  myservo.attach(D1); // Attach servo signal pin to GPIO pin D1
+  myservo.attach(2); 
 }
 
 void loop() {
